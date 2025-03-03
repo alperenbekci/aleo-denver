@@ -1,0 +1,42 @@
+*
+!dist
+!package.json
+!README.md
+!LICENSE
+!wasm/pkg/**
+wasm/src/
+wasm/target/
+wasm/Cargo.toml
+wasm/Cargo.lock
+# Explicitly exclude test files
+tests/
+__tests__/
+*.test.*
+*.spec.*
+
+# Dev configs
+.eslintrc*
+.prettierrc*
+.editorconfig
+.gitignore
+.github
+.vscode
+.idea
+tsconfig.json
+vitest.config.*
+jest.config.*
+babel.config.*
+rollup.config.*
+webpack.config.*
+.env*
+coverage/
+.nyc_output
+*.log
+tsup.config.*
+
+# Source files (since we're publishing dist)
+src/
+
+# Node modules
+tests/node_modules/
+node_modules/
