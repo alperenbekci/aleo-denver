@@ -1,6 +1,7 @@
-program helloworld.aleo;
+// The 'voting_app.aleo' program.
+program voting_app.aleo;
 
-function main:
+function hello:
     input r0 as u32.public;
     input r1 as u32.private;
     add r0 r1 into r2;

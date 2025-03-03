@@ -1,0 +1,10 @@
+{
+    "program": "voting.aleo",
+    "version": "0.0.0",
+    "description": "The voting program",
+    "license": "MIT",
+    "development": {
+        "private_key": "APrivateKey1zkpGKaJY47BXb6knSqd2W1Z7J7CN8am4JEQv4JrZ3gaPq3R",
+        "address": "aleo1yzlta2q5h8t0f8vsw5dqj6tern5qj9d88u5esk0rsyfdwyj5599qxf53l8"
+    }
+}

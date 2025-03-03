@@ -1,0 +1,11 @@
+[project]
+name = "vote"
+version = "0.1.0"
+description = "The vote program"
+license = "MIT"
+
+[remote]
+author = "aleovote"
+
+[target]
+name = "voting" 
