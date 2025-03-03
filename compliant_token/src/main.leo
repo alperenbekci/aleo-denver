@@ -5,7 +5,7 @@ import token_registry.aleo;
 program compliant_token.aleo {
   // Constants defining the token parameters.
   const COMPLAINT_TOKEN_ID: field = 71619063553950105623552field; // Unique token identifier
-  const ADMIN_ADDRESS: address = aleo10047h9c9efxz3d0u69xn7alclvsvt96ysuhts80p7h2eh57kh5zsjwsp8f; // Admin address with minting and issuing privileges
+  const ADMIN_ADDRESS: address = aleo1sc2zyw333dvyp4wnz0vcgvau9kkqdcmlgtzwsqnh7s0a0qd2cqysssnhdn; // Admin address with minting and issuing privileges
   const MAX_SUPPLY: u128 = 1_000_000_000_000_000u128; // Maximum supply of the token
   const BLOCKS_IN_A_DAY: u32 = 28_800u32; // Number of blocks per day for epoch-based calculations
   const MAX_SPEND_PER_DAY: u128 = 10_000_000_000u128; // Daily spending limit per user
@@ -23,6 +23,12 @@ program compliant_token.aleo {
   
   // Mapping to track whether a user has an active spend limit.
   mapping has_spend_limit: field => bool;
+
+  // Mapping to track KYC status of addresses
+  mapping is_kyc_verified: address => bool;
+
+  // Mapping to track blacklisted addresses
+  mapping is_blacklisted: address => bool;
 
   /**
    * Initializes the compliant token by registering it with the token registry.
@@ -107,16 +113,57 @@ program compliant_token.aleo {
   }
 
   /**
+   * Function to set KYC status for an address
+   */
+  transition set_kyc_status(user: address, status: bool) {
+    assert_eq(self.caller, ADMIN_ADDRESS);
+    return finalize(user, status);
+  }
+
+  finalize set_kyc_status(user: address, status: bool) {
+    is_kyc_verified.set(user, status);
+  }
+
+  /**
+   * Function to set blacklist status for an address
+   */
+  transition set_blacklist_status(user: address, status: bool) {
+    assert_eq(self.caller, ADMIN_ADDRESS);
+    return finalize(user, status);
+  }
+
+  finalize set_blacklist_status(user: address, status: bool) {
+    is_blacklisted.set(user, status);
+  }
+
+  /**
+   * Checks KYC and blacklist status
+   */
+  async function check_compliance(sender: address, recipient: address) {
+    let is_sender_verified: bool = is_kyc_verified.get(sender);
+    assert(is_sender_verified);
+    
+    let is_recipient_blacklisted: bool = is_blacklisted.get(recipient);
+    assert(!is_recipient_blacklisted);
+  }
+
+  /**
    * Transfers tokens privately while enforcing the user's spend limit.
    * Ensures that the user cannot exceed the daily spend limit.
    */
-  async transition transfer_private(
-    input_token: token_registry.aleo/Token, // The input token record to be spent
-    spend_limit: SpendLimit, // The user's spend limit record
-    amount: u128, // Amount to transfer
-    recipient: address, // Recipient address
-    public epoch: u32 // Current epoch
-  ) -> (SpendLimit, token_registry.aleo/Token, token_registry.aleo/Token, token_registry.aleo/Token, Future) {
+  transition transfer_private(
+    input_token: token_registry.aleo/Token,
+    spend_limit: SpendLimit,
+    amount: u128,
+    recipient: address,
+    public epoch: u32
+  ) -> (SpendLimit, token_registry.aleo/Token, token_registry.aleo/Token, token_registry.aleo/Token) {
+    // Check compliance
+    let is_sender_verified: bool = is_kyc_verified.get(self.caller);
+    assert(is_sender_verified);
+    
+    let is_recipient_blacklisted: bool = is_blacklisted.get(recipient);
+    assert(!is_recipient_blacklisted);
     
     // Determine the updated amount spent based on the epoch
     let updated_amount_spent: u128 = spend_limit.epoch_spent < epoch 
@@ -134,48 +181,24 @@ program compliant_token.aleo {
     };
 
     // **Authorize the token record**: Converts it into an authorized state so it can be transferred.
-    // This produces 3 outputs:
-    // - An unauthorized token record with the remaining balance
-    // - An authorized token record with the specified transfer amount
-    // - A future that must be awaited
-    let prehook_output: (token_registry.aleo/Token, token_registry.aleo/Token, Future) = token_registry.aleo/prehook_private(
+    let prehook_output: (token_registry.aleo/Token, token_registry.aleo/Token) = token_registry.aleo/prehook_private(
       input_token,
       amount,
       MAX_U32
     );
 
     // **Transfer the authorized token** to the recipient.
-    // This produces 3 outputs:
-    // - A token record with the remaining balance (always 0)
-    // - An unauthorized token with the transferred amount
-    // - A future that must be awaited
-    let transfer_output: (token_registry.aleo/Token, token_registry.aleo/Token, Future) = token_registry.aleo/transfer_private(
+    let transfer_output: (token_registry.aleo/Token, token_registry.aleo/Token) = token_registry.aleo/transfer_private(
       recipient,
       amount,
       prehook_output.1
     );
 
     return (
-      updated_spend_limit, // The updated spend limit record
-      prehook_output.0,    // Remaining balance from authorization
-      transfer_output.0,   // Remaining balance from transfer (should be 0)
-      transfer_output.1,   // The token record sent to the recipient
-      finalize_transfer_private(prehook_output.2, transfer_output.2, epoch) // Await the finalization process
+      updated_spend_limit,
+      prehook_output.0,
+      transfer_output.0,
+      transfer_output.1
     );
-  }
-
-  /**
-   * Finalizes the transfer by awaiting the completion of both authorization and transfer transactions.
-   */
-  async function finalize_transfer_private(
-    f0: Future, // Future from prehook_private
-    f1: Future, // Future from transfer_private
-    epoch: u32
-  ) {
-    f0.await();
-    f1.await();
-
-    let current_epoch: u32 = block.height % BLOCKS_IN_A_DAY;
-    assert_eq(epoch, current_epoch);
   }
 }

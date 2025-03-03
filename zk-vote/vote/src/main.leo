@@ -18,24 +18,18 @@ program voting.aleo {
     mapping vote_counts: u32 => u32;
     mapping voter_status: address => VoterInfo;
 
-    // Oy sayısını güncelleme
-    async function update_vote_count(candidate: u32, weight: u32) -> Future {
+    // Oy sayısını ve voter durumunu güncelleme
+    async function update_vote(candidate: u32, weight: u32, voter: address, info: VoterInfo) {
         let current_count: u32 = Mapping::get_or_use(vote_counts, candidate, 0u32);
         Mapping::set(vote_counts, candidate, current_count + weight);
-        return Future();
-    }
-
-    // Voter status güncelleme
-    async function update_voter_status(voter: address, info: VoterInfo) -> Future {
         Mapping::set(voter_status, voter, info);
-        return Future();
     }
 
     // Oy verme fonksiyonu
     async transition cast_vote(
         public candidate: u32,
         public weight: u32,
-    ) -> (Vote, Future) {
+    ) -> Vote {
         // Oy verenin adresi
         let voter: address = self.caller;
         
@@ -58,23 +52,34 @@ program voting.aleo {
             has_voted: true,
         };
 
-        // Oy sayısını güncelle
-        let update_count_future: Future = update_vote_count(candidate, weight);
-        
-        // Voter status'u güncelle
-        let update_status_future: Future = update_voter_status(voter, voter_info);
+        // Oy sayısını ve voter durumunu güncelle
+        let _: Future = update_vote(candidate, weight, voter, voter_info);
 
-        // Oy kaydını ve Future'ı döndür
-        return (new_vote, await_futures(update_count_future, update_status_future));
+        // Oy kaydını döndür
+        return new_vote;
     }
 
     // Adayın oy sayısını görüntüleme fonksiyonu
-    transition get_vote_count(public candidate: u32) -> u32 {
+    async function get_candidate_votes(candidate: u32) {
+        Mapping::get_or_use(vote_counts, candidate, 0u32);
+    }
+
+    async transition get_vote_count(public candidate: u32) -> u32 {
+        let _: Future = get_candidate_votes(candidate);
         return Mapping::get_or_use(vote_counts, candidate, 0u32);
     }
 
-    // Kullanıcının oy kullanıp kullanmadığını kontrol etme
-    transition check_voter_status(voter: address) -> bool {
+    // Voter durumunu kontrol etme
+    async function get_voter_info(voter: address) {
+        Mapping::get_or_use(voter_status, voter, VoterInfo {
+            candidate: 0u32,
+            weight: 0u32,
+            has_voted: false,
+        });
+    }
+
+    async transition check_voter_status(voter: address) -> bool {
+        let _: Future = get_voter_info(voter);
         let voter_info: VoterInfo = Mapping::get_or_use(voter_status, voter, VoterInfo {
             candidate: 0u32,
             weight: 0u32,
